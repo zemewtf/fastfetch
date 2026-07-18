@@ -3,6 +3,7 @@
 #include "modules/break/break.h"
 
 bool ffPrintBreak([[maybe_unused]] FFBreakOptions* options) {
+    ffRendererFinalizeTree();
     ffLogoPrintLine();
     putchar('\n');
     return true;

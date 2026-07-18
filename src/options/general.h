@@ -18,6 +18,8 @@ typedef struct FFOptionsGeneral {
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__sun) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__) || defined(__GNU__)
     FFDsForceDrmType dsForceDrm;
 #endif
+
+    bool treeConnectors;
 } FFOptionsGeneral;
 
 const char* ffOptionsParseGeneralJsonConfig(FFOptionsGeneral* options, yyjson_val* root, yyjson_val** pkey);

@@ -29,6 +29,8 @@ const char* ffOptionsParseGeneralJsonConfig(FFOptionsGeneral* options, yyjson_va
             options->detectVersion = yyjson_get_bool(val);
         } else if (unsafe_yyjson_equals_str(key, "playerName")) {
             ffStrbufSetJsonVal(&options->playerName, val);
+        } else if (unsafe_yyjson_equals_str(key, "treeConnectors")) {
+            options->treeConnectors = yyjson_get_bool(val);
         }
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__sun) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__) || defined(__GNU__)
         else if (unsafe_yyjson_equals_str(key, "dsForceDrm")) {
@@ -67,6 +69,8 @@ bool ffOptionsParseGeneralCommandLine(FFOptionsGeneral* options, const char* key
         options->detectVersion = ffOptionParseBoolean(value);
     } else if (ffStrEqualsIgnCase(key, "--player-name")) {
         ffOptionParseString(key, value, &options->playerName);
+    } else if (ffStrEqualsIgnCase(key, "--tree-connectors")) {
+        options->treeConnectors = ffOptionParseBoolean(value);
     }
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__sun) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__) || defined(__GNU__)
     else if (ffStrEqualsIgnCase(key, "--ds-force-drm")) {
@@ -91,6 +95,7 @@ void ffOptionsInitGeneral(FFOptionsGeneral* options) {
     options->multithreading = true;
     options->detectVersion = true;
     ffStrbufInit(&options->playerName);
+    options->treeConnectors = false;
 
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__sun) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__) || defined(__GNU__)
     options->dsForceDrm = FF_DS_FORCE_DRM_TYPE_FALSE;
@@ -112,6 +117,8 @@ void ffOptionsGenerateGeneralJsonConfig(FFdata* data, FFOptionsGeneral* options)
     yyjson_mut_obj_add_bool(doc, obj, "detectVersion", options->detectVersion);
 
     yyjson_mut_obj_add_strbuf(doc, obj, "playerName", &options->playerName);
+
+    yyjson_mut_obj_add_bool(doc, obj, "treeConnectors", options->treeConnectors);
 
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__sun) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__) || defined(__GNU__)
 

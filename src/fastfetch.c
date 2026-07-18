@@ -10,6 +10,7 @@
 #include "common/time.h"
 #include "common/strutil.h"
 #include "common/mallocHelper.h"
+#include "common/printing.h"
 #include "fastfetch_datatext.h"
 
 #include <stdlib.h>
@@ -806,6 +807,8 @@ static void run(FFdata* data) {
         } else {
             ffPrintCommandOption(data);
         }
+
+        ffRendererFinalizeTree();
 
         if (instance.state.dynamicInterval > 0) {
             ffLogoPrintRemaining(); // `logoLineCacheClear` inside so that ffLogoPrintLine will use `\e[nC` to move the cursor to the right position instead of reprinting the logo

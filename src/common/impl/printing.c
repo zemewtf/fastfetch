@@ -2,8 +2,126 @@
 #include "common/printing.h"
 #include "common/textModifier.h"
 #include "logo/logo.h"
+#include <ctype.h>
+#include <stdlib.h>
+
+typedef struct FFRenderRow {
+    FFstrbuf output;
+    size_t connectorOffset;
+    bool hasConnector;
+} FFRenderRow;
+
+static FFlist* s_capturedRows = NULL;
+static FILE* s_capturedStream = NULL;
+static char* s_capturedBuf = NULL;
+static size_t s_capturedSize = 0;
+static FILE* s_oldStdout = NULL;
+static size_t s_currentRowConnectorOffset = 0;
+static bool s_currentRowHasConnector = false;
+
+static const char* find_leading_tree_connector(const char* key_str) {
+    if (!key_str) return NULL;
+    while (isspace((unsigned char)*key_str)) {
+        key_str++;
+    }
+    if ((unsigned char)key_str[0] == 0xE2 &&
+        (unsigned char)key_str[1] == 0x94 &&
+        ((unsigned char)key_str[2] == 0x9C || (unsigned char)key_str[2] == 0x94)) {
+        return key_str;
+    }
+    return NULL;
+}
+
+static void endCapturedRow(void) {
+    if (s_capturedStream) {
+        fflush(s_capturedStream);
+        stdout = s_oldStdout;
+        s_oldStdout = NULL;
+
+        FFRenderRow* row = (FFRenderRow*) ffListAdd(s_capturedRows, sizeof(FFRenderRow));
+        ffStrbufInit(&row->output);
+        ffStrbufSetNS(&row->output, (uint32_t) s_capturedSize, s_capturedBuf);
+        row->hasConnector = s_currentRowHasConnector;
+        row->connectorOffset = s_currentRowConnectorOffset;
+
+        fclose(s_capturedStream);
+        free(s_capturedBuf);
+        s_capturedStream = NULL;
+        s_capturedBuf = NULL;
+        s_capturedSize = 0;
+    }
+}
+
+static void ffStartCapturedRow(void) {
+    if (s_capturedStream) {
+        endCapturedRow();
+    }
+
+    if (!s_capturedRows) {
+        s_capturedRows = (FFlist*) malloc(sizeof(FFlist));
+        ffListInit(s_capturedRows);
+    }
+
+    s_capturedStream = open_memstream(&s_capturedBuf, &s_capturedSize);
+    if (s_capturedStream) {
+        s_oldStdout = stdout;
+        stdout = s_capturedStream;
+        s_currentRowConnectorOffset = 0;
+        s_currentRowHasConnector = false;
+    }
+}
+
+void ffRendererFinalizeTree(void) {
+    if (!instance.config.general.treeConnectors) return;
+
+    endCapturedRow();
+
+    if (!s_capturedRows || s_capturedRows->length == 0) return;
+
+
+
+    int lastConnectorIdx = -1;
+    for (uint32_t i = 0; i < s_capturedRows->length; i++) {
+        FFRenderRow* row = (FFRenderRow*) ffListGet(s_capturedRows, sizeof(FFRenderRow), i);
+        if (row->hasConnector) {
+            lastConnectorIdx = (int) i;
+        }
+    }
+
+    for (uint32_t i = 0; i < s_capturedRows->length; i++) {
+        FFRenderRow* row = (FFRenderRow*) ffListGet(s_capturedRows, sizeof(FFRenderRow), i);
+        if (row->hasConnector) {
+            if ((int) i == lastConnectorIdx) {
+                if (row->connectorOffset + 2 < row->output.length) {
+                    row->output.chars[row->connectorOffset] = (char) 0xE2;
+                    row->output.chars[row->connectorOffset + 1] = (char) 0x94;
+                    row->output.chars[row->connectorOffset + 2] = (char) 0x94;
+                }
+            } else {
+                if (row->connectorOffset + 2 < row->output.length) {
+                    row->output.chars[row->connectorOffset] = (char) 0xE2;
+                    row->output.chars[row->connectorOffset + 1] = (char) 0x94;
+                    row->output.chars[row->connectorOffset + 2] = (char) 0x9C;
+                }
+            }
+        }
+    }
+
+    for (uint32_t i = 0; i < s_capturedRows->length; i++) {
+        FFRenderRow* row = (FFRenderRow*) ffListGet(s_capturedRows, sizeof(FFRenderRow), i);
+        ffStrbufWriteTo(&row->output, stdout);
+        ffStrbufDestroy(&row->output);
+    }
+
+    ffListDestroy(s_capturedRows);
+    free(s_capturedRows);
+    s_capturedRows = NULL;
+}
 
 void ffPrintLogoAndKey(const char* moduleName, uint8_t moduleIndex, const FFModuleArgs* moduleArgs, FFPrintType printType) {
+    if (instance.config.general.treeConnectors) {
+        ffStartCapturedRow();
+    }
     ffLogoPrintLine();
 
     // This is used by --set-keyless, in this case we want neither the module name nor the separator
@@ -37,6 +155,14 @@ void ffPrintLogoAndKey(const char* moduleName, uint8_t moduleIndex, const FFModu
 
             // nullptr check is required for modules with custom keys, e.g. disk with the folder path
             if ((printType & FF_PRINT_TYPE_NO_CUSTOM_KEY) || !moduleArgs || moduleArgs->key.length == 0) {
+                if (instance.config.general.treeConnectors && s_capturedStream) {
+                    const char* conn = find_leading_tree_connector(moduleName);
+                    if (conn) {
+                        fflush(s_capturedStream);
+                        s_currentRowHasConnector = true;
+                        s_currentRowConnectorOffset = s_capturedSize + (size_t)(conn - moduleName);
+                    }
+                }
                 fputs(moduleName, stdout);
 
                 if (moduleIndex > 0) {
@@ -47,7 +173,15 @@ void ffPrintLogoAndKey(const char* moduleName, uint8_t moduleIndex, const FFModu
                 FF_PARSE_FORMAT_STRING_CHECKED(&key, &moduleArgs->key, ((FFformatarg[]) {
                                                                            FF_ARG(moduleIndex, "index"),
                                                                            FF_ARG(moduleArgs->keyIcon, "icon"),
-                                                                       }));
+                                                                        }));
+                if (instance.config.general.treeConnectors && s_capturedStream) {
+                    const char* conn = find_leading_tree_connector(key.chars);
+                    if (conn) {
+                        fflush(s_capturedStream);
+                        s_currentRowHasConnector = true;
+                        s_currentRowConnectorOffset = s_capturedSize + (size_t)(conn - key.chars);
+                    }
+                }
                 ffStrbufWriteTo(&key, stdout);
             }
         }

@@ -18,3 +18,4 @@ bool ffPrintFormat(const char* moduleName, uint8_t moduleIndex, const FFModuleAr
 [[gnu::format(printf, 5, 6)]] void ffPrintError(const char* moduleName, uint8_t moduleIndex, const FFModuleArgs* moduleArgs, FFPrintType printType, const char* message, ...);
 void ffPrintColor(const FFstrbuf* colorValue);
 void ffPrintCharTimes(char c, uint32_t times);
+void ffRendererFinalizeTree(void);
